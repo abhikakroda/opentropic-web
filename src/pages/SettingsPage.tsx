@@ -10,6 +10,7 @@ import {
   validateCredentials,
 } from '../lib/apiClient';
 import type { ApiProviderId } from '../types/app';
+import { swiggyStatus, connectSwiggy } from '../lib/swiggy';
 
 export function SettingsPage() {
   const providers = useWorkspaceStore((state) => state.providers);
@@ -38,6 +39,39 @@ export function SettingsPage() {
   const [models, setModels] = useState<string[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelsError, setModelsError] = useState('');
+
+  const [swiggy, setSwiggy] = useState<{ connected: boolean; expiresAt: number }>({
+    connected: false,
+    expiresAt: 0,
+  });
+  const [swiggyNotice, setSwiggyNotice] = useState<{ kind: 'idle' | 'ok' | 'error'; message: string }>({
+    kind: 'idle',
+    message: '',
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    swiggyStatus().then((s) => {
+      if (!cancelled) setSwiggy(s);
+    });
+    const params = new URLSearchParams(window.location.search);
+    const swiggyParam = params.get('swiggy');
+    if (swiggyParam === 'connected') {
+      setSwiggyNotice({ kind: 'ok', message: 'Swiggy connected. You can now order from chat.' });
+    } else if (swiggyParam === 'error') {
+      const reason = params.get('reason') || 'unknown';
+      setSwiggyNotice({ kind: 'error', message: `Swiggy sign-in did not complete (${reason}). Try connecting again.` });
+    }
+    if (swiggyParam) {
+      params.delete('swiggy');
+      params.delete('reason');
+      const clean = window.location.pathname + (params.toString() ? `?${params}` : '');
+      window.history.replaceState({}, '', clean);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     setProvider(apiConfig.provider);
@@ -296,6 +330,63 @@ export function SettingsPage() {
             ) : null}
           </div>
         </form>
+      </div>
+
+      <div className="mt-4 border border-dashed border-border bg-card p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold">Swiggy ordering</h2>
+            <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+              Connect your Swiggy account to search restaurants, browse menus, and place orders straight from chat. Sign-in happens on Swiggy; OpenTropic only keeps a secure session token on the server and never sees your password.
+            </p>
+          </div>
+          <span
+            className={`font-mono text-xs uppercase tracking-widest ${
+              swiggy.connected ? 'text-scope' : 'text-muted-foreground'
+            }`}
+          >
+            {swiggy.connected ? 'connected' : 'not connected'}
+          </span>
+        </div>
+
+        {swiggyNotice.kind !== 'idle' ? (
+          <p
+            className={`mt-4 text-sm ${
+              swiggyNotice.kind === 'error' ? 'text-red-400' : 'text-scope'
+            }`}
+          >
+            {swiggyNotice.message}
+          </p>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap gap-3">
+          {swiggy.connected ? (
+            <>
+              <span className="border border-dashed border-scope/60 bg-scope/10 px-4 py-2 font-mono text-xs uppercase tracking-widest text-scope">
+                Swiggy linked
+              </span>
+              <button
+                type="button"
+                onClick={connectSwiggy}
+                className="border border-border px-4 py-2 font-mono text-xs uppercase tracking-widest text-muted-foreground transition hover:border-foreground hover:text-foreground"
+              >
+                Reconnect
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={connectSwiggy}
+              className="btn-solid"
+            >
+              Connect Swiggy
+            </button>
+          )}
+        </div>
+
+        <p className="mt-4 font-mono text-[11px] leading-relaxed tracking-wide text-muted-foreground">
+          Orders are placed with your explicit confirmation and are cash-on-delivery, capped at ₹1000. Availability, pricing, and menus are read fresh from Swiggy on each request.
+        </p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

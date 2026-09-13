@@ -58,6 +58,20 @@
       var msg = document.getElementById("msg");
       var openBtn = document.getElementById("openBtn");
 
+      // WEB flow vs ANDROID flow: /api/swiggy/start sets a readable marker
+      // cookie (ot_swiggy_web=1). If present, this login was started from the
+      // web app, so complete the token exchange server-side instead of trying
+      // to deep-link into the Android app.
+      var isWebFlow = document.cookie.split(";").some(function (c) {
+        return c.trim().indexOf("ot_swiggy_web=") === 0;
+      });
+      if (isWebFlow && !hasError) {
+        // Clear the marker and hand the code/state to the web callback API.
+        document.cookie = "ot_swiggy_web=; Path=/; Max-Age=0; SameSite=Lax; Secure";
+        window.location.replace("/api/swiggy/callback" + search);
+        return;
+      }
+
       openBtn.setAttribute("href", deepLink);
 
       if (hasError) {

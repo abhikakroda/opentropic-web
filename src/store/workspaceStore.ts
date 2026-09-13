@@ -29,6 +29,7 @@ import type {
 } from '../types/app';
 import { providerPresets, streamApiChat } from '../lib/apiClient';
 import type { ChatTurn } from '../lib/apiClient';
+import { swiggyStatus, swiggyFood } from '../lib/swiggy';
 
 function createPairCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -796,26 +797,64 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
             state.memory.facts.map((fact) => '- ' + fact.label + ': ' + fact.detail).join('\n')
           : '';
 
+        // Swiggy live augmentation: if the user is asking about food/restaurants
+        // and their browser is connected to Swiggy, fetch real restaurants
+        // server-side and give the model actual live data to work with.
+        let swiggyContext = '';
+        const foodIntent = /\b(order|food|eat|hungry|lunch|dinner|breakfast|biryani|pizza|dosa|restaurant|swiggy|meal|snack|coffee|deliver)\b/i.test(trimmed);
+        if (foodIntent) {
+          try {
+            const status = await swiggyStatus();
+            if (!status.connected) {
+              swiggyContext =
+                '\n\nSwiggy status: NOT connected. If the user wants to order food, tell them to connect Swiggy first ' +
+                '(Settings → Connect Swiggy, a one-time sign-in), then you can search restaurants and place the order for them right here.';
+            } else {
+              const addrRes = await swiggyFood.getAddresses();
+              const addresses = (addrRes?.result as any)?.data ?? (addrRes?.result as any)?.content ?? addrRes?.result;
+              let addressId = '';
+              const list = Array.isArray(addresses) ? addresses : addresses?.addresses;
+              if (Array.isArray(list) && list.length) {
+                const home = list.find((a: any) => a.label === 'Home') ?? list[0];
+                addressId = home?.id ?? home?.addressId ?? '';
+              }
+              const query = trimmed.slice(0, 80);
+              let restaurantsBlock = '';
+              if (addressId) {
+                const searchRes = await swiggyFood.searchRestaurants(addressId, query);
+                restaurantsBlock = '\nLive restaurant search results (JSON): ' + JSON.stringify(searchRes?.result ?? searchRes).slice(0, 2500);
+              }
+              swiggyContext =
+                '\n\nSwiggy status: CONNECTED. You can search, build a cart, and place a real order for the user through Swiggy. ' +
+                'ALWAYS show the cart items and total and get an explicit "yes" before placing an order. ' +
+                (addressId ? 'Resolved delivery address id: ' + addressId + '.' : 'No saved address found — ask the user to add one.') +
+                restaurantsBlock;
+            }
+          } catch {
+            swiggyContext = '\n\nSwiggy status: could not be checked right now.';
+          }
+        }
+
         const systemPrompt =
           'You are OpenTropic, an AI workspace assistant running in the web app. ' +
           'Be concise and helpful. You can help with research, drafting artifacts, organizing tasks, ' +
           'and planning Android companion handoffs.\n\n' +
-          'IMPORTANT — Swiggy and food ordering: OpenTropic DOES support Swiggy. ' +
-          'Swiggy is connected through the paired OpenTropic Android app, which holds an authorized ' +
-          'Swiggy account connection (OAuth) and can search restaurants, browse menus, and place real ' +
-          'orders via Swiggy. The web app you are running in cannot log into Swiggy directly (browsers ' +
-          'block that), so the correct flow is: (1) here in the web chat, draft the order — restaurant, ' +
-          'items, delivery address, and any notes; (2) hand that draft off to the paired Android app, ' +
-          'where the user confirms and the real Swiggy search/checkout happens. ' +
-          'When a user asks to connect Swiggy or order food, DO NOT say you cannot connect to Swiggy. ' +
-          'Instead, confirm that Swiggy runs on the paired Android app, then either draft their order or ' +
-          'explain the one-time connect step (open the Android app, tap Connect Swiggy, sign in once). ' +
-          'Keep it brief and action-oriented.\n\n' +
+          'IMPORTANT — Swiggy and food ordering: OpenTropic DOES support real Swiggy ordering right here ' +
+          'in this web app. Swiggy sign-in and every Swiggy call go through OpenTropic\'s own secure ' +
+          'server, which holds the user\'s authorized Swiggy connection (OAuth). From this chat you can ' +
+          'search restaurants, browse menus, build a cart, and place a real cash-on-delivery order — you ' +
+          'do NOT need the Android app for this and you must NEVER tell the user you cannot connect to ' +
+          'Swiggy from the web. If the live "Swiggy status" below says NOT connected, tell the user to do ' +
+          'the one-time connect step (Settings → Connect Swiggy, sign in on Swiggy once) and then you can ' +
+          'order for them. If it says CONNECTED, go ahead: confirm the restaurant, items, delivery ' +
+          'address, and total, and ALWAYS get an explicit "yes" before placing the order. Orders are ' +
+          'cash-on-delivery, capped at ₹1000. Keep it brief and action-oriented.\n\n' +
           'Format replies in Markdown. For any mathematical notation, ALWAYS use LaTeX: wrap inline ' +
           'math in single dollar signs like $E = mc^2$ and display equations in double dollar signs ' +
           'like $$\\text{FSPL (dB)} = 20\\log_{10}(d) + 20\\log_{10}(f) + 32.44$$. Do not write formulas ' +
           'as plain text.' +
-          memoryContext;
+          memoryContext +
+          swiggyContext;
 
         const turns: ChatTurn[] = [
           { role: 'system', content: systemPrompt },
