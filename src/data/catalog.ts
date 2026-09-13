@@ -144,6 +144,15 @@ export const seedSkills: SkillItem[] = [
     enabled: true,
     androidHandoff: false,
   },
+  {
+    id: 'swiggy-order',
+    name: 'Swiggy Order',
+    category: 'Food',
+    description:
+      'Draft a Swiggy food order from chat — restaurant, items, delivery address, and notes — then hand off to the paired Android app to place and pay on-screen. Checkout and payment stay on the phone.',
+    enabled: true,
+    androidHandoff: true,
+  },
 ];
 
 export const seedTasks: TaskItem[] = [
@@ -410,6 +419,7 @@ export const seedProviders: ProviderConnection[] = [
   { id: 'slack', label: 'Slack', group: 'Channels', connected: false, detail: 'Workspace channel' },
   { id: 'telegram', label: 'Telegram', group: 'Channels', connected: false, detail: 'Bot channel' },
   { id: 'whatsapp', label: 'WhatsApp', group: 'Channels', connected: false, detail: 'Android send confirmation' },
+  { id: 'swiggy', label: 'Swiggy', group: 'Channels', connected: false, detail: 'Food ordering · placed on Android' },
   { id: 'ssh', label: 'SSH / MCP', group: 'Systems', connected: true, detail: 'Remote ops bridge' },
   { id: 'android', label: 'Android companion', group: 'Devices', connected: false, detail: 'Pair via code' },
 ];

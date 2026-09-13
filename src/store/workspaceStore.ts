@@ -1010,6 +1010,30 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
         selectedArtifactId: state.selectedArtifactId,
         apiConfig: state.apiConfig,
       }),
+      // Union newly-shipped seed integrations (skills, providers, devices) into
+      // persisted state by id, so new features like Swiggy appear for existing
+      // users without wiping their chats, tasks, or settings.
+      merge: (persisted, current) => {
+        const saved = (persisted ?? {}) as Partial<typeof current>;
+        const unionById = <T extends { id: string }>(seed: T[], stored?: T[]): T[] => {
+          const list = stored ? [...stored] : [];
+          const seen = new Set(list.map((item) => item.id));
+          for (const item of seed) {
+            if (!seen.has(item.id)) {
+              list.push(item);
+              seen.add(item.id);
+            }
+          }
+          return list;
+        };
+        return {
+          ...current,
+          ...saved,
+          skills: unionById(seedSkills, saved.skills),
+          providers: unionById(seedProviders, saved.providers),
+          devices: unionById(seedDevices, saved.devices),
+        };
+      },
     },
   ),
 );

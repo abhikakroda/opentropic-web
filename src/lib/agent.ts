@@ -22,11 +22,20 @@ export type AgentIntent =
   | 'travel-planner'
   | 'widget-management'
   | 'remote-agent'
+  | 'swiggy-order'
   | 'task-summary'
   | 'skill-help'
   | 'general';
 
-export type AndroidChannel = 'whatsapp' | 'telegram' | 'slack' | 'sms' | 'widget' | 'phone' | 'generic';
+export type AndroidChannel =
+  | 'whatsapp'
+  | 'telegram'
+  | 'slack'
+  | 'sms'
+  | 'widget'
+  | 'phone'
+  | 'swiggy'
+  | 'generic';
 
 export interface AndroidHandoffPlan {
   title: string;
@@ -125,6 +134,7 @@ function detectAndroidChannel(text: string): AndroidChannel {
   if (/slack/.test(text)) return 'slack';
   if (/\bsms\b|text message|imessage/.test(text)) return 'sms';
   if (/widget/.test(text)) return 'widget';
+  if (/swiggy|order food|food delivery|instamart/.test(text)) return 'swiggy';
   if (/phone|call|companion|android/.test(text)) return 'phone';
   return 'generic';
 }
@@ -272,7 +282,59 @@ function channelLabel(channel: AndroidChannel) {
   if (channel === 'telegram') return 'Telegram';
   if (channel === 'slack') return 'Slack';
   if (channel === 'sms') return 'SMS';
+  if (channel === 'swiggy') return 'Swiggy';
   return 'message';
+}
+
+// Parse a loose Swiggy request into a structured order draft.
+// Example: "Order 2 masala dosa and a filter coffee from Saravana Bhavan to home".
+function parseSwiggyOrder(input: string) {
+  const restaurant =
+    input.match(/from\s+([^,.;]+?)(?:\s+(?:to|for|at|near)\b|[,.;]|$)/i)?.[1]?.trim() ?? null;
+  const address =
+    input.match(/\bto\s+([^,.;]+?)(?:\s+from\b|[,.;]|$)/i)?.[1]?.trim() ??
+    input.match(/\b(?:deliver(?:\s+to)?|address)\s+([^,.;]+)/i)?.[1]?.trim() ??
+    null;
+  const note =
+    input.match(/\b(?:note|instruction[s]?|make it|extra)\s*[:-]?\s*([^,.;]+)/i)?.[1]?.trim() ?? null;
+
+  // Item list: strip the "from ... / to ..." tail, then split on "and"/commas.
+  const itemsRaw = input
+    .replace(/^.*?\b(?:order|get me|buy|swiggy|want|need)\b\s*(?:food|me|some)?\s*/i, '')
+    .replace(/\bfrom\s+[^,.;]+/i, '')
+    .replace(/\bto\s+[^,.;]+/i, '')
+    .replace(/\b(?:note|instruction[s]?)\s*[:-].*/i, '')
+    .trim();
+  const items = itemsRaw
+    .split(/\s*(?:,|\band\b|\+)\s*/i)
+    .map((part) => part.trim())
+    .map((part) => part.replace(/^(?:a|an|the|some|please)\s+/i, '').trim())
+    .filter((part) => part.length > 1 && !/^(please|hungry|order|food)$/i.test(part))
+    .slice(0, 12);
+
+  return { restaurant, address, note, items };
+}
+
+function buildSwiggyOrder(input: string) {
+  const { restaurant, address, note, items } = parseSwiggyOrder(input);
+  const itemLines = items.length
+    ? items.map((item) => `- ${item}`).join('\n')
+    : '- (items not detected — add them before placing the order)';
+  return [
+    '# Swiggy order draft',
+    '',
+    `**Restaurant:** ${restaurant ?? '_not specified_'}`,
+    `**Deliver to:** ${address ?? '_use default Swiggy address_'}`,
+    '',
+    '## Items',
+    itemLines,
+    '',
+    note ? `**Delivery note:** ${note}` : '**Delivery note:** _none_',
+    '',
+    '---',
+    'Checkout and payment happen in the Swiggy app on your paired Android device.',
+    'Nothing is ordered from the browser — this is a draft for on-phone confirmation.',
+  ].join('\n');
 }
 
 function buildCrossChannelDraft(input: string, channel: AndroidChannel) {
@@ -424,6 +486,7 @@ function artifactKindForIntent(intent: AgentIntent): ArtifactKind {
     intent === 'meeting-prep' ||
     intent === 'draft-reply' ||
     intent === 'cross-channel-draft' ||
+    intent === 'swiggy-order' ||
     intent === 'workspace-memory'
   ) {
     return 'note';
@@ -440,7 +503,7 @@ function routeInput(ctx: AgentContext): AgentRoute {
     wantsEdit;
   const wantsAndroid =
     /android|whatsapp|telegram|slack|sms|text message|widget|phone|companion|send (this|it|reply)/.test(text);
-  const channel = detectAndroidChannel(text);
+  let channel = detectAndroidChannel(text);
   const memoryUpdate = maybeRememberFromInput(ctx.input, ctx.memory);
 
   const candidates: Array<{ intent: AgentIntent; skillId: string | null; score: number; reason: string }> = [
@@ -529,6 +592,14 @@ function routeInput(ctx: AgentContext): AgentRoute {
       reason: 'Travel planning requested.',
     },
     {
+      intent: 'swiggy-order',
+      skillId: 'swiggy-order',
+      score: /swiggy|order food|food delivery|instamart|order .* (from|to eat)|hungry|lunch|dinner order/.test(text)
+        ? 0.95
+        : 0,
+      reason: 'Swiggy food order requested.',
+    },
+    {
       intent: 'automation',
       skillId: 'automation',
       score: /automat|recurring|routine|every morning|schedule/.test(text) ? 0.86 : 0,
@@ -564,6 +635,12 @@ function routeInput(ctx: AgentContext): AgentRoute {
     skill = null;
   }
 
+  // A Swiggy order always routes through the Swiggy on-phone channel, even when
+  // the user did not literally type "swiggy" (e.g. "order dosa from X").
+  if (intent === 'swiggy-order') {
+    channel = 'swiggy';
+  }
+
   const needsAndroid =
     wantsAndroid ||
     Boolean(
@@ -571,6 +648,7 @@ function routeInput(ctx: AgentContext): AgentRoute {
         (intent === 'draft-reply' ||
           intent === 'cross-channel-draft' ||
           intent === 'widget-management' ||
+          intent === 'swiggy-order' ||
           intent === 'automation'),
     );
 
@@ -633,6 +711,7 @@ function routeInput(ctx: AgentContext): AgentRoute {
     intent === 'travel-planner' ||
     intent === 'draft-reply' ||
     intent === 'cross-channel-draft' ||
+    intent === 'swiggy-order' ||
     (wantsArtifact && intent !== 'task-summary' && intent !== 'skill-help' && intent !== 'workspace-memory')
   ) {
     const topicMatch = ctx.input.replace(/^(draft|create|generate|write|make|prepare)\s+/i, '').trim();
@@ -667,6 +746,11 @@ function routeInput(ctx: AgentContext): AgentRoute {
       summary = `Draft ${channelLabel(channel)} reply ready for review/send.`;
       content = buildReplyDraft(ctx.input, channel);
     }
+    else if (intent === 'swiggy-order') {
+      name = 'swiggy-order.md';
+      summary = 'Swiggy order draft ready to place on the paired Android app.';
+      content = buildSwiggyOrder(ctx.input);
+    }
 
     if (content) {
       artifactDraft = {
@@ -682,7 +766,11 @@ function routeInput(ctx: AgentContext): AgentRoute {
   let androidPlan: AndroidHandoffPlan | undefined;
   if (
     needsAndroid &&
-    (intent === 'draft-reply' || intent === 'cross-channel-draft' || intent === 'widget-management' || wantsAndroid)
+    (intent === 'draft-reply' ||
+      intent === 'cross-channel-draft' ||
+      intent === 'widget-management' ||
+      intent === 'swiggy-order' ||
+      wantsAndroid)
   ) {
     const messagingChannel =
       channel === 'slack' || channel === 'telegram' || channel === 'whatsapp' || channel === 'sms';
@@ -697,15 +785,20 @@ function routeInput(ctx: AgentContext): AgentRoute {
               ? 'Confirm SMS send on Android'
               : channel === 'widget'
                 ? 'Apply widget configuration'
-                : 'Run phone-side companion action';
+                : channel === 'swiggy'
+                  ? 'Open Swiggy on Android and place the order on-screen'
+                  : 'Run phone-side companion action';
     const payload =
-      artifactDraft && (intent === 'draft-reply' || intent === 'cross-channel-draft')
+      artifactDraft &&
+      (intent === 'draft-reply' || intent === 'cross-channel-draft' || intent === 'swiggy-order')
         ? artifactDraft.content.replace(/^#.*\n+/, '').split('---')[0].trim()
         : ctx.input;
     androidPlan = {
       title:
         channel === 'widget'
           ? 'Configure Android widget'
+          : channel === 'swiggy'
+            ? 'Place Swiggy order on Android'
           : messagingChannel
             ? `${channelLabel(channel)} draft send`
             : 'Android companion handoff',
@@ -717,15 +810,18 @@ function routeInput(ctx: AgentContext): AgentRoute {
         (channel === 'whatsapp' ||
           channel === 'sms' ||
           channel === 'widget' ||
+          channel === 'swiggy' ||
           channel === 'phone' ||
           channel === 'generic'),
       skillId: skill?.id,
       steps: ctx.pairedAndroid
         ? [
             'Review the drafted payload in web chat/artifacts.',
-            channel === 'whatsapp' || channel === 'sms'
-              ? 'Confirm send on the paired Android companion. Messaging confirmation stays on-device.'
-              : 'Send through the connected channel after review.',
+            channel === 'swiggy'
+              ? 'Open the Swiggy app on the paired Android device, add the drafted items, and place the order. Checkout and payment stay on the phone.'
+              : channel === 'whatsapp' || channel === 'sms'
+                ? 'Confirm send on the paired Android companion. Messaging confirmation stays on-device.'
+                : 'Send through the connected channel after review.',
             'Mark the task done after confirmation.',
           ]
         : [
@@ -901,6 +997,10 @@ export function runSkillRouter(ctx: AgentContext): AgentRunResult {
   } else if (route.intent === 'cross-channel-draft') {
     replyParts.push(
       'Drafted in web for the selected channel. Messaging send confirmation stays on Android when the channel needs the phone.',
+    );
+  } else if (route.intent === 'swiggy-order') {
+    replyParts.push(
+      'Swiggy order drafted in the web app. Review the items and address in Artifacts, then hand off to your paired Android device to place and pay — checkout stays on the phone.',
     );
   } else if (route.artifactDraft?.mode === 'edit') {
     replyParts.push(`Updated artifact “${route.artifactDraft.name}”. Open Artifacts to review the revision.`);
