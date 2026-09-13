@@ -109,23 +109,40 @@ export async function pkceChallenge(verifier: string): Promise<string> {
   return b64urlFromBytes(new Uint8Array(digest));
 }
 
-// Dynamic client registration (matches Android registerClient()).
+// Swiggy's MCP gateway currently issues the same static client_id to every
+// caller ("swiggy-mcp"). Dynamic registration is best-effort: if it succeeds we
+// use whatever client_id comes back, but if the register call is unreachable or
+// returns a non-JSON page (edge networks sometimes get an HTML challenge), we
+// fall back to the known static id so the login flow still works.
+export const STATIC_CLIENT_ID = 'swiggy-mcp';
+
 export async function registerClient(): Promise<string> {
-  const res = await fetch(MCP_BASE + '/auth/register', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_name: 'OpenTropic Web',
-      redirect_uris: [REDIRECT_URI],
-      token_endpoint_auth_method: 'none',
-      grant_types: ['authorization_code', 'refresh_token'],
-      response_types: ['code'],
-      scope: SCOPE,
-    }),
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error('register failed: ' + JSON.stringify(json));
-  return json.client_id as string;
+  try {
+    const res = await fetch(MCP_BASE + '/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        client_name: 'OpenTropic Web',
+        redirect_uris: [REDIRECT_URI],
+        token_endpoint_auth_method: 'none',
+        grant_types: ['authorization_code', 'refresh_token'],
+        response_types: ['code'],
+        scope: SCOPE,
+      }),
+    });
+    const text = await res.text();
+    if (res.ok || res.status === 201) {
+      try {
+        const json = JSON.parse(text);
+        if (json && typeof json.client_id === 'string') return json.client_id;
+      } catch {
+        // non-JSON success body — fall through to static id
+      }
+    }
+  } catch {
+    // network error — fall through to static id
+  }
+  return STATIC_CLIENT_ID;
 }
 
 export async function exchangeCode(
@@ -135,7 +152,7 @@ export async function exchangeCode(
 ): Promise<{ access_token: string; refresh_token?: string; expires_in?: number }> {
   const res = await fetch(MCP_BASE + '/auth/token', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({
       grant_type: 'authorization_code',
       code,
@@ -144,7 +161,13 @@ export async function exchangeCode(
       redirect_uri: REDIRECT_URI,
     }),
   });
-  const json = await res.json();
+  const text = await res.text();
+  let json: any;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error('token exchange returned non-JSON (' + res.status + '): ' + text.slice(0, 200));
+  }
   if (!res.ok) throw new Error('token exchange failed: ' + JSON.stringify(json));
   return json;
 }
@@ -155,10 +178,16 @@ export async function refreshToken(
 ): Promise<{ access_token: string; refresh_token?: string; expires_in?: number }> {
   const res = await fetch(MCP_BASE + '/auth/token', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({ grant_type: 'refresh_token', refresh_token: refresh, client_id: clientId }),
   });
-  const json = await res.json();
+  const text = await res.text();
+  let json: any;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error('refresh returned non-JSON (' + res.status + '): ' + text.slice(0, 200));
+  }
   if (!res.ok) throw new Error('refresh failed: ' + JSON.stringify(json));
   return json;
 }
