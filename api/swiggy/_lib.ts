@@ -9,6 +9,14 @@
 
 export const MCP_BASE = 'https://mcp.swiggy.com';
 export const REDIRECT_URI = 'https://opentropic.app/auth/callback/swiggy';
+// All redirect URIs OpenTropic uses, declared at client registration so Swiggy
+// can whitelist every surface. REDIRECT_URI above stays the canonical one we
+// actually send users back to for the web sign-in flow.
+export const ALL_REDIRECT_URIS = [
+  'https://opentropic.app/auth/callback/swiggy',
+  'https://www.opentropic.app/auth/callback/swiggy',
+  'opentropic://auth/callback/swiggy',
+];
 export const SCOPE = 'mcp:tools mcp:resources mcp:prompts';
 export const COOKIE_NAME = 'ot_swiggy';
 
@@ -123,7 +131,7 @@ export async function registerClient(): Promise<string> {
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
         client_name: 'OpenTropic Web',
-        redirect_uris: [REDIRECT_URI],
+        redirect_uris: ALL_REDIRECT_URIS,
         token_endpoint_auth_method: 'none',
         grant_types: ['authorization_code', 'refresh_token'],
         response_types: ['code'],
