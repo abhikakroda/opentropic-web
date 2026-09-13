@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Connecting Swiggy…</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #000; color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px; text-align: center;
+    }
+    .card { max-width: 360px; width: 100%; }
+    .logo {
+      width: 72px; height: 72px; border-radius: 20px;
+      border: 4px solid #fff; margin: 0 auto 24px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .ring {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: 5px solid #fff; border-top-color: transparent;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    h1 { font-size: 20px; font-weight: 600; margin: 0 0 8px; }
+    p { font-size: 14px; line-height: 1.5; color: #b3b3b3; margin: 0 0 20px; }
+    .btn {
+      display: inline-block; background: #fff; color: #000;
+      text-decoration: none; font-weight: 600; font-size: 15px;
+      padding: 12px 22px; border-radius: 999px;
+    }
+    .err { color: #ff6b6b; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo"><div class="ring" id="ring"></div></div>
+    <h1 id="title">Connecting Swiggy…</h1>
+    <p id="msg">Returning you to OpenTropic. If nothing happens, tap the button below.</p>
+    <a class="btn hidden" id="openBtn" href="#">Open OpenTropic</a>
+  </div>
+  <script>
+    (function () {
+      // Preserve all query params (code, state, error, error_description) exactly.
+      var search = window.location.search || "";
+      var params = new URLSearchParams(search);
+      var hasError = params.get("error");
+      var deepLink = "opentropic://auth/callback/swiggy" + search;
+
+      var ring = document.getElementById("ring");
+      var title = document.getElementById("title");
+      var msg = document.getElementById("msg");
+      var openBtn = document.getElementById("openBtn");
+
+      openBtn.setAttribute("href", deepLink);
+
+      if (hasError) {
+        ring.classList.add("hidden");
+        title.textContent = "Swiggy sign-in failed";
+        title.classList.add("err");
+        var desc = params.get("error_description") || hasError;
+        msg.textContent = desc + " — return to OpenTropic and try again.";
+        openBtn.classList.remove("hidden");
+        openBtn.textContent = "Back to OpenTropic";
+      }
+
+      // Fire the deep link immediately to hand the code back to the app.
+      function jump() {
+        try { window.location.replace(deepLink); }
+        catch (e) { window.location.href = deepLink; }
+      }
+      jump();
+
+      // Fallback: if the app didn't take over within ~1.5s, reveal a manual button.
+      setTimeout(function () {
+        openBtn.classList.remove("hidden");
+        if (!hasError) {
+          msg.textContent = "Almost there — tap Open OpenTropic to finish connecting Swiggy.";
+        }
+      }, 1500);
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "cleanUrls": false,
+  "trailingSlash": false,
+  "rewrites": [
+    {
+      "source": "/auth/callback/swiggy",
+      "destination": "/auth/callback/swiggy/index.html"
+    },
+    {
+      "source": "/((?!auth/callback/swiggy|\\.well-known/assetlinks\\.json|assets/|brand/|favicon\\.svg|icons\\.svg|manifest\\.webmanifest).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/.well-known/assetlinks.json",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" },
+        { "key": "Cache-Control", "value": "public, max-age=300" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.opentropic.app",
+      "sha256_cert_fingerprints": [
+        "06:0A:0F:2E:67:85:83:0B:E7:B7:88:BF:DD:B5:9B:92:7A:2C:8F:F7:8E:2F:9E:39:E2:68:88:8D:C0:F4:F9:C3"
+      ]
+    }
+  }
+]
