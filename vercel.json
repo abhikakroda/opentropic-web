@@ -8,7 +8,7 @@
       "destination": "/auth/callback/swiggy/index.html"
     },
     {
-      "source": "/((?!auth/callback/swiggy|\\.well-known/assetlinks\\.json|assets/|brand/|favicon\\.svg|icons\\.svg|manifest\\.webmanifest).*)",
+      "source": "/((?!api/|auth/callback/swiggy|\\.well-known/assetlinks\\.json|assets/|brand/|favicon\\.svg|icons\\.svg|manifest\\.webmanifest).*)",
       "destination": "/index.html"
     }
   ],

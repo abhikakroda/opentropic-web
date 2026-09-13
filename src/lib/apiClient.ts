@@ -102,12 +102,63 @@ function modelsEndpoint(base: string): string {
   return base.endsWith('/models') ? base : base + '/models';
 }
 
+// Some providers (e.g. Baseten inference endpoints) do not send CORS headers,
+// so a direct browser fetch fails with a generic "Failed to fetch" TypeError.
+// We first try the direct call (fast path for OpenAI/OpenRouter/Groq/Together),
+// and on a network/CORS failure we transparently retry through our own
+// same-origin serverless proxy (/api/llm), which forwards the request
+// server-side where CORS does not apply.
+const PROXY_ENDPOINT = '/api/llm';
+
+function isNetworkError(err: unknown): boolean {
+  // Browser CORS/network failures throw a TypeError with "Failed to fetch"
+  // (or "Load failed" on Safari). ApiError (a real HTTP response) is NOT this.
+  return err instanceof TypeError;
+}
+
+async function proxyFetch(
+  url: string,
+  init: { method: string; headers: Record<string, string>; body?: string; signal?: AbortSignal },
+): Promise<Response> {
+  return fetch(PROXY_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      url,
+      method: init.method,
+      headers: init.headers,
+      body: init.body,
+    }),
+    signal: init.signal,
+  });
+}
+
+// Direct fetch with automatic same-origin proxy fallback on CORS/network error.
+async function resilientFetch(
+  url: string,
+  init: { method: string; headers: Record<string, string>; body?: string; signal?: AbortSignal },
+): Promise<Response> {
+  try {
+    return await fetch(url, {
+      method: init.method,
+      headers: init.headers,
+      body: init.method === 'GET' || init.method === 'HEAD' ? undefined : init.body,
+      signal: init.signal,
+    });
+  } catch (err) {
+    if (isNetworkError(err)) {
+      return proxyFetch(url, init);
+    }
+    throw err;
+  }
+}
+
 export async function fetchModels(
   creds: Pick<ApiCredentials, 'provider' | 'apiKey' | 'baseUrl'>,
   signal?: AbortSignal,
 ): Promise<string[]> {
   const base = normalizeBase(creds.baseUrl);
-  const res = await fetch(modelsEndpoint(base), {
+  const res = await resilientFetch(modelsEndpoint(base), {
     method: 'GET',
     headers: headers({ ...creds, model: '' } as ApiCredentials),
     signal,
@@ -146,7 +197,7 @@ async function chatCompletions(
   signal?: AbortSignal,
 ): Promise<string> {
   const base = normalizeBase(creds.baseUrl);
-  const res = await fetch(chatEndpoint(base), {
+  const res = await resilientFetch(chatEndpoint(base), {
     method: 'POST',
     headers: headers(creds),
     body: JSON.stringify({
@@ -215,7 +266,7 @@ export async function streamApiChat(
   signal?: AbortSignal,
 ): Promise<string> {
   const base = normalizeBase(creds.baseUrl);
-  const res = await fetch(chatEndpoint(base), {
+  const res = await resilientFetch(chatEndpoint(base), {
     method: 'POST',
     headers: headers(creds),
     body: JSON.stringify({
