@@ -56,10 +56,10 @@ const SKILLS: SkillInfo[] = [
   { id: 'research-deliverable', name: 'Research Deliverable', category: 'Workflow', description: 'One prompt produces a source brief, outline, HTML artifact, and shareable summary.', androidHandoff: false },
   { id: 'workspace-memory', name: 'Workspace Memory', category: 'Memory', description: 'Lightweight memory over conversations, enabled skills, paired devices, and recent artifacts.', androidHandoff: false },
   { id: 'travel-planner', name: 'Travel Planner', category: 'Planning', description: 'Itineraries, maps, and shareable travel pages.', androidHandoff: false },
-  { id: 'swiggy-order', name: 'Swiggy Order', category: 'Food', description: 'Draft a Swiggy food order from chat, then hand off to the paired Android app to place and pay on-screen.', androidHandoff: true },
+  { id: 'swiggy-order', name: 'Swiggy Order', category: 'Food', description: 'Order Swiggy food directly from chat: search restaurants, build the cart, then place and pay via the Swiggy tools (swiggy_search_restaurants / swiggy_manage_cart / swiggy_place_order). No Android phone needed.', androidHandoff: false },
 ];
 
-type Channel = 'whatsapp' | 'telegram' | 'slack' | 'sms' | 'widget' | 'phone' | 'swiggy' | 'generic';
+type Channel = 'whatsapp' | 'telegram' | 'slack' | 'sms' | 'widget' | 'phone' | 'generic';
 
 export const TOOLS: McpTool[] = [
   {
@@ -83,14 +83,14 @@ export const TOOLS: McpTool[] = [
   {
     name: 'plan_android_handoff',
     description:
-      'Build a structured Android handoff plan for a natural-language request (e.g. "order biryani on Swiggy", "message Alex on WhatsApp that I am running late"). Returns the channel, action, payload, and step list the OpenTropic Android companion would run. This does NOT send anything; sending stays on the phone with user confirmation.',
+      'Build a structured Android handoff plan for a messaging/phone request that has NO direct tool here (e.g. "message Alex on WhatsApp that I am running late", "send a Telegram", "apply a widget"). Returns the channel, action, payload, and step list the OpenTropic Android companion would run. This does NOT send anything. Do NOT use this for food — Swiggy food ordering is done directly here with swiggy_search_restaurants / swiggy_manage_cart / swiggy_place_order, no phone required.',
     inputSchema: {
       type: 'object',
       properties: {
         request: { type: 'string', description: 'The user request to turn into a phone-side plan.' },
         channel: {
           type: 'string',
-          enum: ['whatsapp', 'telegram', 'slack', 'sms', 'widget', 'phone', 'swiggy', 'generic'],
+          enum: ['whatsapp', 'telegram', 'slack', 'sms', 'widget', 'phone', 'generic'],
           description: 'Optional explicit channel; otherwise inferred from the request text.',
         },
       },
@@ -201,7 +201,6 @@ function textResult(text: string) {
 
 function inferChannel(request: string): Channel {
   const r = request.toLowerCase();
-  if (/swiggy|biryani|food|order.*(eat|dinner|lunch)|restaurant/.test(r)) return 'swiggy';
   if (/whatsapp/.test(r)) return 'whatsapp';
   if (/telegram/.test(r)) return 'telegram';
   if (/slack/.test(r)) return 'slack';
@@ -219,15 +218,12 @@ function planFor(request: string, channel: Channel) {
     sms: { action: 'Open Messages and prepare the SMS draft', requiresPairing: true },
     widget: { action: 'Apply the widget configuration on the phone', requiresPairing: true },
     phone: { action: 'Prepare the phone-side action', requiresPairing: true },
-    swiggy: { action: 'Draft the Swiggy order and open checkout on-screen', requiresPairing: true },
     generic: { action: 'Prepare the requested action for the companion', requiresPairing: true },
   }[channel];
 
   const steps = [
     'Pair the OpenTropic Android companion in Devices.',
-    channel === 'swiggy'
-      ? 'Companion drafts the order (restaurant, items, address, notes).'
-      : 'Companion opens ' + channel + ' with the prepared draft.',
+    'Companion opens ' + channel + ' with the prepared draft.',
     'Review on the phone and confirm — sending/payment stays on-device.',
   ];
 
@@ -300,6 +296,21 @@ export async function callTool(
     case 'plan_android_handoff': {
       const request = typeof args.request === 'string' ? args.request.trim() : '';
       if (!request) throw new Error('request is required');
+      // Food is handled directly by the Swiggy tools, not via Android handoff.
+      if (/swiggy|biryani|pizza|burger|food|restaurant|order.*(eat|dinner|lunch|meal)|hungry/i.test(request) &&
+          (typeof args.channel !== 'string' || args.channel === '' )) {
+        return textResult(
+          JSON.stringify(
+            {
+              redirect: 'use_swiggy_tools',
+              message:
+                'This is a food request. Do NOT plan an Android handoff. Order directly here: call swiggy_status, then swiggy_search_restaurants to find the place, swiggy_restaurant_menu + swiggy_manage_cart to build the cart, show the total, and swiggy_place_order with confirm:true to place and pay. No phone/pairing is needed.',
+            },
+            null,
+            2,
+          ),
+        );
+      }
       const channel = (typeof args.channel === 'string' ? args.channel : inferChannel(request)) as Channel;
       const plan = planFor(request, channel);
       return textResult(JSON.stringify(plan, null, 2));
