@@ -55,6 +55,24 @@ export interface SignedClaims {
   ccm?: string; // code_challenge_method
   ruri?: string; // redirect_uri the code was issued for
   cid?: string; // client_id
+  // Optional linked Swiggy session, threaded through so the server-side MCP
+  // endpoint can call Swiggy on the user's behalf without a browser cookie.
+  // (ChatGPT connects machine-to-machine, so there is no cookie to read.)
+  sw?: SwiggyLink;
+  // Present only on the transient 'link' state we pass to Swiggy as its OAuth
+  // state, so our swiggy-callback can rebuild the original ChatGPT request and
+  // finish the Swiggy PKCE exchange. Never issued to ChatGPT.
+  cs?: string; // ChatGPT's upstream 'state'
+  sv?: string; // Swiggy PKCE verifier
+  scid?: string; // Swiggy client_id
+}
+
+// A minimal Swiggy token bundle carried inside our signed token.
+export interface SwiggyLink {
+  cid: string; // Swiggy client_id
+  at: string; // Swiggy access_token
+  rt?: string; // Swiggy refresh_token
+  exp: number; // Swiggy access token expiry (epoch ms)
 }
 
 export async function signToken(claims: SignedClaims): Promise<string> {

@@ -12,6 +12,7 @@ import {
   ACCESS_TTL_MS,
   SCOPE,
 } from './_lib';
+import type { SwiggyLink } from './_lib';
 
 export const config = { runtime: 'edge' };
 
@@ -31,12 +32,12 @@ async function readForm(req: Request): Promise<Record<string, string>> {
   return out;
 }
 
-async function issueTokens(sub: string) {
+async function issueTokens(sub: string, sw?: SwiggyLink) {
   const now = Date.now();
-  const access = await signToken({ t: 'access', sub, scope: SCOPE, exp: now + ACCESS_TTL_MS });
+  const access = await signToken({ t: 'access', sub, scope: SCOPE, exp: now + ACCESS_TTL_MS, sw });
   // Refresh token is an access-shaped token with a longer life; the endpoint
   // reissues from it. Kept simple and stateless on purpose.
-  const refresh = await signToken({ t: 'access', sub, scope: SCOPE, exp: now + ACCESS_TTL_MS * 6 });
+  const refresh = await signToken({ t: 'access', sub, scope: SCOPE, exp: now + ACCESS_TTL_MS * 6, sw });
   return {
     access_token: access,
     token_type: 'Bearer',
@@ -68,7 +69,7 @@ export default async function handler(req: Request): Promise<Response> {
     if (!(await verifyPkce(verifier, claims.cc || '', claims.ccm))) {
       return json(400, { error: 'invalid_grant', error_description: 'PKCE verification failed.' });
     }
-    return json(200, await issueTokens(claims.sub));
+    return json(200, await issueTokens(claims.sub, claims.sw));
   }
 
   if (grant === 'refresh_token') {
@@ -76,7 +77,7 @@ export default async function handler(req: Request): Promise<Response> {
     if (!claims || claims.t !== 'access') {
       return json(400, { error: 'invalid_grant', error_description: 'Refresh token is invalid or expired.' });
     }
-    return json(200, await issueTokens(claims.sub));
+    return json(200, await issueTokens(claims.sub, claims.sw));
   }
 
   return json(400, { error: 'unsupported_grant_type' });

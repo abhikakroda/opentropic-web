@@ -12,6 +12,7 @@
 // metadata, which triggers ChatGPT's OAuth flow (authorize -> token).
 import { json, corsHeaders, verifyToken, origin } from './_lib';
 import { TOOLS, callTool } from './tools';
+import type { SignedClaims } from './_lib';
 
 export const config = { runtime: 'edge' };
 
@@ -38,7 +39,7 @@ function unauthorized(req: Request): Response {
   });
 }
 
-async function handleRpc(msg: any): Promise<unknown | null> {
+async function handleRpc(msg: any, claims: SignedClaims): Promise<unknown | null> {
   const { id, method, params } = msg || {};
 
   switch (method) {
@@ -48,7 +49,11 @@ async function handleRpc(msg: any): Promise<unknown | null> {
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'OpenTropic', version: '1.0.0' },
         instructions:
-          'OpenTropic MCP server. Use about_opentropic for an overview, list_skills to browse workspace skills, and plan_android_handoff to turn a request into a phone-side plan. Sending/payment always requires on-device confirmation.',
+          'OpenTropic MCP server. Use about_opentropic for an overview and list_skills to browse workspace skills. ' +
+          'For food: swiggy_status checks if Swiggy is linked; swiggy_search_restaurants finds places; swiggy_restaurant_menu gets a menu; ' +
+          'swiggy_manage_cart adds/removes/views cart items; swiggy_place_order places a REAL paid order. ' +
+          'Before placing an order you MUST show the user the cart + total (swiggy_manage_cart action:view), get an explicit yes, then call swiggy_place_order with confirm:true. ' +
+          'plan_android_handoff turns other requests (WhatsApp, Telegram, etc.) into a phone-side plan without sending.',
       });
 
     case 'notifications/initialized':
@@ -66,7 +71,7 @@ async function handleRpc(msg: any): Promise<unknown | null> {
       const args = params?.arguments || {};
       if (!name) return rpcError(id, -32602, 'Missing tool name.');
       try {
-        const result = await callTool(name, args);
+        const result = await callTool(name, args, claims);
         return rpcResult(id, result);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'tool_failed';
@@ -112,14 +117,14 @@ export default async function handler(req: Request): Promise<Response> {
   if (Array.isArray(payload)) {
     const responses = [];
     for (const msg of payload) {
-      const r = await handleRpc(msg);
+      const r = await handleRpc(msg, claims);
       if (r !== null) responses.push(r);
     }
     if (responses.length === 0) return new Response(null, { status: 202, headers: corsHeaders() });
     return json(200, responses);
   }
 
-  const response = await handleRpc(payload);
+  const response = await handleRpc(payload, claims);
   if (response === null) return new Response(null, { status: 202, headers: corsHeaders() });
   return json(200, response);
 }
