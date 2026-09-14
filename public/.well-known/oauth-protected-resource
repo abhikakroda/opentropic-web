@@ -1,0 +1,12 @@
+{
+  "resource": "https://opentropic.app/api/mcp",
+  "authorization_servers": [
+    "https://opentropic.app"
+  ],
+  "scopes_supported": [
+    "mcp"
+  ],
+  "bearer_methods_supported": [
+    "header"
+  ]
+}

@@ -1,0 +1,125 @@
+// /api/mcp  — OpenTropic's MCP server for ChatGPT (streamable HTTP transport).
+//
+// This is the "Server URL" you paste into ChatGPT's Custom connector screen:
+//   https://<your-domain>/api/mcp
+//
+// Transport: MCP streamable HTTP. ChatGPT POSTs JSON-RPC 2.0 messages here and
+// accepts either application/json or text/event-stream. We reply with plain
+// JSON (a single response), which is a valid streamable-HTTP response.
+//
+// Auth: OAuth Bearer. If the Authorization header is missing/invalid we return
+// 401 with a WWW-Authenticate header pointing at the protected-resource
+// metadata, which triggers ChatGPT's OAuth flow (authorize -> token).
+import { json, corsHeaders, verifyToken, origin } from './_lib';
+import { TOOLS, callTool } from './tools';
+
+export const config = { runtime: 'edge' };
+
+const PROTOCOL_VERSION = '2025-06-18';
+
+function rpcResult(id: unknown, result: unknown) {
+  return { jsonrpc: '2.0', id, result };
+}
+function rpcError(id: unknown, code: number, message: string) {
+  return { jsonrpc: '2.0', id, error: { code, message } };
+}
+
+function unauthorized(req: Request): Response {
+  const base = origin(req);
+  return new Response(JSON.stringify({ error: 'unauthorized' }), {
+    status: 401,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+      'WWW-Authenticate':
+        'Bearer resource_metadata="' + base + '/.well-known/oauth-protected-resource"',
+      ...corsHeaders(),
+    },
+  });
+}
+
+async function handleRpc(msg: any): Promise<unknown | null> {
+  const { id, method, params } = msg || {};
+
+  switch (method) {
+    case 'initialize':
+      return rpcResult(id, {
+        protocolVersion: PROTOCOL_VERSION,
+        capabilities: { tools: { listChanged: false } },
+        serverInfo: { name: 'OpenTropic', version: '1.0.0' },
+        instructions:
+          'OpenTropic MCP server. Use about_opentropic for an overview, list_skills to browse workspace skills, and plan_android_handoff to turn a request into a phone-side plan. Sending/payment always requires on-device confirmation.',
+      });
+
+    case 'notifications/initialized':
+    case 'notifications/cancelled':
+      return null; // notifications get no response
+
+    case 'ping':
+      return rpcResult(id, {});
+
+    case 'tools/list':
+      return rpcResult(id, { tools: TOOLS });
+
+    case 'tools/call': {
+      const name = params?.name;
+      const args = params?.arguments || {};
+      if (!name) return rpcError(id, -32602, 'Missing tool name.');
+      try {
+        const result = await callTool(name, args);
+        return rpcResult(id, result);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'tool_failed';
+        // MCP convention: tool errors are surfaced in the result with isError.
+        return rpcResult(id, { content: [{ type: 'text', text: 'Error: ' + message }], isError: true });
+      }
+    }
+
+    default:
+      if (id === undefined) return null; // unknown notification
+      return rpcError(id, -32601, 'Method not found: ' + method);
+  }
+}
+
+export default async function handler(req: Request): Promise<Response> {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders() });
+
+  // A GET to /api/mcp is used by some clients to open an SSE stream. We do not
+  // push server-initiated events, so return 405 to signal POST-only JSON-RPC.
+  if (req.method === 'GET') {
+    return json(405, { error: 'method_not_allowed', message: 'This MCP server uses POST JSON-RPC.' });
+  }
+  if (req.method !== 'POST') {
+    return json(405, { error: 'method_not_allowed' });
+  }
+
+  // Auth gate.
+  const authz = req.headers.get('authorization') || '';
+  const bearer = authz.toLowerCase().startsWith('bearer ') ? authz.slice(7).trim() : '';
+  const claims = await verifyToken(bearer);
+  if (!claims || claims.t !== 'access') {
+    return unauthorized(req);
+  }
+
+  let payload: any;
+  try {
+    payload = await req.json();
+  } catch {
+    return json(400, rpcError(null, -32700, 'Parse error'));
+  }
+
+  // JSON-RPC may arrive as a single message or a batch.
+  if (Array.isArray(payload)) {
+    const responses = [];
+    for (const msg of payload) {
+      const r = await handleRpc(msg);
+      if (r !== null) responses.push(r);
+    }
+    if (responses.length === 0) return new Response(null, { status: 202, headers: corsHeaders() });
+    return json(200, responses);
+  }
+
+  const response = await handleRpc(payload);
+  if (response === null) return new Response(null, { status: 202, headers: corsHeaders() });
+  return json(200, response);
+}
