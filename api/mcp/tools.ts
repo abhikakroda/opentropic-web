@@ -19,7 +19,7 @@ export interface McpTool {
 }
 
 import type { SignedClaims, SwiggyLink } from './_lib';
-import { callMcpTool, refreshToken as swiggyRefresh } from '../swiggy/_lib';
+import { callMcpTool, listMcpTools, refreshToken as swiggyRefresh } from '../swiggy/_lib';
 
 const PRODUCT = {
   name: 'OpenTropic',
@@ -110,6 +110,33 @@ const SWIGGY_TOOLS: McpTool[] = [
     name: 'swiggy_status',
     description: 'Check whether this ChatGPT connection is linked to a Swiggy account and can place food orders.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'swiggy_list_tools',
+    description:
+      'List the real tools Swiggy\'s MCP server exposes on a given server (food/im/dineout), with their exact names and input schemas. Use this to discover the correct tool + argument names before calling swiggy_call_tool.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        server: { type: 'string', enum: ['food', 'im', 'dineout'], description: 'Which Swiggy MCP server. Defaults to food.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'swiggy_call_tool',
+    description:
+      'Call any Swiggy MCP tool by its exact name (from swiggy_list_tools) with arbitrary arguments. Use this for searching restaurants, viewing menus, and building the cart. Do NOT use it to place/pay for an order — use swiggy_place_order so the money guardrail applies.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tool: { type: 'string', description: 'Exact Swiggy tool name from swiggy_list_tools.' },
+        args: { type: 'object', description: 'Arguments object for the tool.' },
+        server: { type: 'string', enum: ['food', 'im', 'dineout'], description: 'Which Swiggy MCP server. Defaults to food.' },
+      },
+      required: ['tool'],
+      additionalProperties: false,
+    },
   },
   {
     name: 'swiggy_search_restaurants',
@@ -294,6 +321,40 @@ export async function callTool(
           2,
         ),
       );
+    }
+
+    case 'swiggy_list_tools': {
+      const token = await swiggyToken(claims?.sw);
+      if (!token) return notLinked();
+      const server = typeof args.server === 'string' ? args.server : 'food';
+      const result = await listMcpTools(server, token);
+      return textResult(JSON.stringify(result, null, 2));
+    }
+
+    case 'swiggy_call_tool': {
+      const token = await swiggyToken(claims?.sw);
+      if (!token) return notLinked();
+      const tool = typeof args.tool === 'string' ? args.tool.trim() : '';
+      if (!tool) throw new Error('tool is required');
+      // Block order-placing tools from the generic passthrough so they always
+      // go through swiggy_place_order (which enforces the confirmation gate).
+      if (/place.*order|checkout|pay\b|payment/i.test(tool)) {
+        return textResult(
+          JSON.stringify(
+            {
+              error: 'use_place_order',
+              message:
+                'Placing/paying for an order must go through swiggy_place_order (confirm:true after the user reviews the cart + total), not swiggy_call_tool.',
+            },
+            null,
+            2,
+          ),
+        );
+      }
+      const server = typeof args.server === 'string' ? args.server : 'food';
+      const toolArgs = (args.args && typeof args.args === 'object' ? args.args : {}) as Record<string, unknown>;
+      const result = await callMcpTool(server, token, tool, toolArgs);
+      return textResult(JSON.stringify(result, null, 2));
     }
 
     case 'swiggy_search_restaurants': {

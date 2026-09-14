@@ -50,8 +50,9 @@ async function handleRpc(msg: any, claims: SignedClaims): Promise<unknown | null
         serverInfo: { name: 'OpenTropic', version: '1.0.0' },
         instructions:
           'OpenTropic MCP server. Use about_opentropic for an overview and list_skills to browse workspace skills. ' +
-          'For food: swiggy_status checks if Swiggy is linked; swiggy_search_restaurants finds places; swiggy_restaurant_menu gets a menu; ' +
-          'swiggy_manage_cart adds/removes/views cart items; swiggy_place_order places a REAL paid order. ' +
+          'For food: first call swiggy_status to confirm Swiggy is linked. To discover the exact Swiggy tools + argument names, call swiggy_list_tools, then use swiggy_call_tool to search restaurants, open menus, and build the cart. ' +
+          '(swiggy_search_restaurants / swiggy_restaurant_menu / swiggy_manage_cart are convenience wrappers but the real tool names may differ, so prefer swiggy_list_tools + swiggy_call_tool.) ' +
+          'swiggy_place_order places a REAL paid order. ' +
           'Before placing an order you MUST show the user the cart + total (swiggy_manage_cart action:view), get an explicit yes, then call swiggy_place_order with confirm:true. ' +
           'plan_android_handoff turns other requests (WhatsApp, Telegram, etc.) into a phone-side plan without sending.',
       });
