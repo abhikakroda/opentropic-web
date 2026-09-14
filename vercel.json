@@ -8,7 +8,7 @@
       "destination": "/auth/callback/swiggy/index.html"
     },
     {
-      "source": "/((?!api/|auth/callback/swiggy|\\.well-known/assetlinks\\.json|assets/|brand/|favicon\\.svg|icons\\.svg|manifest\\.webmanifest).*)",
+      "source": "/((?!api/|auth/callback/swiggy|\\.well-known/|assets/|brand/|favicon\\.svg|icons\\.svg|manifest\\.webmanifest).*)",
       "destination": "/index.html"
     }
   ],
@@ -16,8 +16,48 @@
     {
       "source": "/.well-known/assetlinks.json",
       "headers": [
-        { "key": "Content-Type", "value": "application/json" },
-        { "key": "Cache-Control", "value": "public, max-age=300" }
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=300"
+        }
+      ]
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=300"
+        }
+      ]
+    },
+    {
+      "source": "/.well-known/oauth-authorization-server",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=300"
+        }
       ]
     }
   ]
