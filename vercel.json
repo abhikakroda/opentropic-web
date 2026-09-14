@@ -8,6 +8,30 @@
       "destination": "/auth/callback/swiggy/index.html"
     },
     {
+      "source": "/.well-known/oauth-protected-resource",
+      "destination": "/api/mcp/discovery?doc=protected-resource"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource/:path*",
+      "destination": "/api/mcp/discovery?doc=protected-resource"
+    },
+    {
+      "source": "/.well-known/oauth-authorization-server",
+      "destination": "/api/mcp/discovery?doc=authorization-server"
+    },
+    {
+      "source": "/.well-known/oauth-authorization-server/:path*",
+      "destination": "/api/mcp/discovery?doc=authorization-server"
+    },
+    {
+      "source": "/.well-known/openid-configuration",
+      "destination": "/api/mcp/discovery?doc=authorization-server"
+    },
+    {
+      "source": "/.well-known/openid-configuration/:path*",
+      "destination": "/api/mcp/discovery?doc=authorization-server"
+    },
+    {
       "source": "/((?!api/|auth/callback/swiggy|\\.well-known/|assets/|brand/|favicon\\.svg|icons\\.svg|manifest\\.webmanifest).*)",
       "destination": "/index.html"
     }
@@ -16,48 +40,8 @@
     {
       "source": "/.well-known/assetlinks.json",
       "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/json"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=300"
-        }
-      ]
-    },
-    {
-      "source": "/.well-known/oauth-protected-resource",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/json"
-        },
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=300"
-        }
-      ]
-    },
-    {
-      "source": "/.well-known/oauth-authorization-server",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/json"
-        },
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=300"
-        }
+        { "key": "Content-Type", "value": "application/json" },
+        { "key": "Cache-Control", "value": "public, max-age=300" }
       ]
     }
   ]
