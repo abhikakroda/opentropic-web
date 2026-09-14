@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import {
   Boxes,
+  UtensilsCrossed,
   LayoutDashboard,
   MessageSquareText,
   Settings2,
@@ -19,6 +20,7 @@ const links = [
   { to: '/app/skills', label: 'Skills', icon: Workflow },
   { to: '/app/artifacts', label: 'Artifacts', icon: Boxes },
   { to: '/app/devices', label: 'Devices', icon: Smartphone },
+  { to: '/app/food', label: 'Food', icon: UtensilsCrossed },
   { to: '/app/settings', label: 'Settings', icon: Settings2 },
 ];
 

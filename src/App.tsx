@@ -4,6 +4,7 @@ import { MarketingShell } from './components/MarketingShell';
 import { ArtifactsPage } from './pages/ArtifactsPage';
 import { ChatPage } from './pages/ChatPage';
 import { DevicesPage } from './pages/DevicesPage';
+import { FoodPage } from './pages/FoodPage';
 import { HomePage } from './pages/HomePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SkillsPage } from './pages/SkillsPage';
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="skills" element={<SkillsPage />} />
           <Route path="artifacts" element={<ArtifactsPage />} />
           <Route path="devices" element={<DevicesPage />} />
+          <Route path="food" element={<FoodPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
 
