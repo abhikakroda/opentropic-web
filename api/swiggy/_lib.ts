@@ -251,6 +251,25 @@ export async function callMcpTool(
   return parsed?.result;
 }
 
+// List the tools a Swiggy MCP server exposes. Lets callers discover the real
+// tool names/schemas instead of hardcoding guesses.
+export async function listMcpTools(server: string, token: string): Promise<unknown> {
+  const res = await fetch(MCP_BASE + '/' + server, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream',
+      Authorization: 'Bearer ' + token,
+    },
+    body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method: 'tools/list' }),
+  });
+  const raw = await res.text();
+  if (!res.ok) throw new Error('MCP tools/list failed (' + res.status + '): ' + raw.slice(0, 300));
+  const parsed = parseMcpResponse(raw);
+  if (parsed?.error) throw new Error('MCP tools/list error: ' + JSON.stringify(parsed.error));
+  return parsed?.result;
+}
+
 function parseMcpResponse(raw: string): any {
   const trimmed = raw.trim();
   // Try plain JSON first.
