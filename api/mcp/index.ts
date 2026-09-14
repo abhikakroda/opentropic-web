@@ -50,11 +50,11 @@ async function handleRpc(msg: any, claims: SignedClaims): Promise<unknown | null
         serverInfo: { name: 'OpenTropic', version: '1.0.0' },
         instructions:
           'OpenTropic MCP server. Use about_opentropic for an overview and list_skills to browse workspace skills. ' +
-          'For food: first call swiggy_status to confirm Swiggy is linked. To discover the exact Swiggy tools + argument names, call swiggy_list_tools, then use swiggy_call_tool to search restaurants, open menus, and build the cart. ' +
-          '(swiggy_search_restaurants / swiggy_restaurant_menu / swiggy_manage_cart are convenience wrappers but the real tool names may differ, so prefer swiggy_list_tools + swiggy_call_tool.) ' +
-          'swiggy_place_order places a REAL paid order. ' +
-          'Before placing an order you MUST show the user the cart + total (swiggy_manage_cart action:view), get an explicit yes, then call swiggy_place_order with confirm:true. ' +
-          'plan_android_handoff turns other requests (WhatsApp, Telegram, etc.) into a phone-side plan without sending.',
+          'FOOD ORDERING is done DIRECTLY here through the Swiggy tools — never tell the user to pair a phone or use the Android companion for food. ' +
+          'Food flow: (1) swiggy_status to confirm Swiggy is linked; if not linked, tell the user to reconnect the connector and sign in to Swiggy. ' +
+          '(2) swiggy_list_tools to discover Swiggy\'s exact tool + argument names, then swiggy_call_tool (or the wrappers swiggy_search_restaurants / swiggy_restaurant_menu / swiggy_manage_cart) to search restaurants, open menus, and build the cart. ' +
+          '(3) Show the user the full cart + total (swiggy_manage_cart action:view), get an explicit yes, then swiggy_place_order with confirm:true to place AND pay the REAL order right here. ' +
+          'plan_android_handoff is ONLY for messaging/phone tasks with no direct tool (WhatsApp, Telegram, Slack, SMS, widgets) — do NOT use it for food.',
       });
 
     case 'notifications/initialized':
