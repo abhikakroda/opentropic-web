@@ -415,6 +415,7 @@ export const seedProviders: ProviderConnection[] = [
   { id: 'claude', label: 'Claude Code', group: 'Runtimes', connected: true, detail: 'Remote runtime ready' },
   { id: 'codex', label: 'Codex', group: 'Runtimes', connected: true, detail: 'Remote runtime ready' },
   { id: 'openrouter', label: 'OpenRouter', group: 'Models', connected: false, detail: 'BYO key' },
+  { id: 'vercel', label: 'Vercel AI Gateway', group: 'Models', connected: false, detail: 'jev + more, BYO key' },
   { id: 'grok', label: 'xAI Grok', group: 'Models', connected: false, detail: 'OAuth' },
   { id: 'slack', label: 'Slack', group: 'Channels', connected: false, detail: 'Workspace channel' },
   { id: 'telegram', label: 'Telegram', group: 'Channels', connected: false, detail: 'Bot channel' },

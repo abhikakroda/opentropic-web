@@ -107,7 +107,7 @@ export interface WorkspaceMemory {
   enabled: boolean;
 }
 
-export type ApiProviderId = 'openai' | 'openrouter' | 'groq' | 'together' | 'custom';
+export type ApiProviderId = 'openai' | 'openrouter' | 'groq' | 'together' | 'vercel' | 'custom';
 
 export interface ApiConfig {
   provider: ApiProviderId;

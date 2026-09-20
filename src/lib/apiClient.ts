@@ -2,7 +2,7 @@
 // Mirrors the Android app's OpenAICompatibleProvider: base URL + Bearer key,
 // prefers /v1/responses, falls back to /v1/chat/completions.
 
-export type ApiProviderId = 'openai' | 'openrouter' | 'groq' | 'together' | 'custom';
+export type ApiProviderId = 'openai' | 'openrouter' | 'groq' | 'together' | 'vercel' | 'custom';
 
 export interface ApiCredentials {
   provider: ApiProviderId;
@@ -59,6 +59,14 @@ export const providerPresets: ProviderPreset[] = [
     keysUrl: 'https://api.together.xyz/settings/api-keys',
   },
   {
+    id: 'vercel',
+    label: 'Vercel AI Gateway',
+    baseUrl: 'https://ai-gateway.vercel.sh/v1',
+    defaultModel: 'jev',
+    keyHint: 'vck_...',
+    keysUrl: 'https://vercel.com/abhikakrodas-projects/~/ai-gateway/api-keys',
+  },
+  {
     id: 'custom',
     label: 'Custom (OpenAI-compatible)',
     baseUrl: 'https://api.openai.com/v1',
@@ -90,6 +98,11 @@ function headers(creds: ApiCredentials): Record<string, string> {
   if (creds.provider === 'openrouter') {
     h['HTTP-Referer'] = 'https://opentropic.tech';
     h['X-Title'] = 'OpenTropic';
+  }
+  if (creds.provider === 'vercel') {
+    // Vercel AI Gateway accepts optional attribution headers.
+    h['http-referer'] = 'https://opentropic.app';
+    h['x-title'] = 'OpenTropic';
   }
   return h;
 }
